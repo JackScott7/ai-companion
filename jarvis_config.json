@@ -6,10 +6,10 @@
     },
     "model": {
         "name": "llama-3.2-3b-instruct",
-        "behavior": "Respond in short and concise answers, with a bit of detail",
+        "behavior": "Respond in short but enough length and concise answers, with a bit of detail",
         "temperature": 0.7,
         "max_tokens": -1,
         "stream": true
     },
-    "last_health_check": ""
+    "last_health_check": "2025-01-30T01:31:00.240363"
 }

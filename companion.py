@@ -3,6 +3,7 @@ import sys
 import requests
 import json
 import subprocess
+import uuid
 from rich.console import Console
 from rich.markdown import Markdown
 from typing import Iterator
@@ -18,9 +19,15 @@ class JarvisCompanion:
     Runs on the default IP:PORT by LM Studio (localhost:1234) can be changed from `jarvis_config.json`
     """
 
-    def __init__(self, verbose, save_chat):
+    def __init__(self, verbose, save_chat=False, context=None):
+        """
+        :param verbose: Should output in verbose mode
+        :param save_chat: Whether to save the chat
+        :param context:  history to provide to LLM as context
+        """
         self.verbose = verbose
         self.save_chat = save_chat
+        self.context = context
         self.__CONSOLE = Console()
 
         config = f'{self.__get_cur_file_dir()}\\jarvis_config.json'
@@ -86,14 +93,30 @@ class JarvisCompanion:
                         if log:
                             print("[+] Server is up and LLM is loaded")
                         return True
-                    else:
-                        if log:
-                            print("[-] LLM is not loaded")
+                    elif log:
+                        print("[-] LLM is not loaded")
             except requests.exceptions.ConnectionError:
                 print("[-] Server is down")
             return False
         else:
             return True
+
+    @property
+    def get_all_chats(self) -> list:
+        return [chat[:-4] for chat in os.listdir("./conversations")]
+
+
+    def __get_context(self) -> str | None:
+        if self.context:
+            with open(f"./conversations/{self.context}.txt") as chat:
+                return chat.read()
+        return None
+
+    def __save_context(self, chat) -> None:
+        """Save content to the context file"""
+        mode = 'a' if self.context in self.get_all_chats else 'w'
+        with open(f"./conversations/{self.context}.txt", mode) as file:
+            file.write(chat)
 
     def llm_generate(self, prompt) -> Iterator:
         """
@@ -101,14 +124,23 @@ class JarvisCompanion:
         :param prompt: Your input to Jarvis
         :return: An iterator with the response object
         """
+
+        history = ""
+
         if self.verbose:
             print("[+] Starting up...\n")
+
+        if not self.context:
+            self.context = str(uuid.uuid4())
+        # Check if chat has a history
+        elif self.context in self.get_all_chats:
+            history = self.__get_context()
 
         payload = {
             "model": self.model['name'],
             "messages": [
                 {"role": "system", "content": self.model['behavior']},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": f"{history}\n{prompt}"}
             ],
             "temperature": self.model['temperature'],
             "max_tokens": self.model['max_tokens'],
@@ -118,7 +150,10 @@ class JarvisCompanion:
         headers = {"Content-Type": "application/json"}
         response = requests.post(self.api['completion'], headers=headers, data=json.dumps(payload), stream=True)
 
-        return response.iter_content(chunk_size=None) if payload['stream'] == True else response.json()
+        if payload['stream']:
+            return response.iter_content(chunk_size=1024 * 1024)
+
+        return response.json()
 
     def stream_llm_response(self, response, render_markdown=True) -> None:
         """
@@ -138,6 +173,7 @@ class JarvisCompanion:
             return
 
         buffer = ""  # Initialize a buffer to accumulate Markdown content
+        save_buffer = ""  # Buffer for saving to file
 
         for chunk in response:
             if chunk:
@@ -149,10 +185,17 @@ class JarvisCompanion:
                     # Append new content to the buffer
                     if data['delta']:
                         current_response = data['delta']['content']
+                        save_buffer += current_response
+
                         if not render_markdown:
                             print(current_response, end='', flush=True)
                         else:
                             buffer += current_response
+
+                    # Save accumulated content when we have a reasonable chunk
+                    if self.save_chat and len(save_buffer) >= 100:
+                        self.__save_context(save_buffer)
+                        save_buffer = ""  # Clear save buffer after writing
 
                     if render_markdown:
                         # Render only when buffer contains two consecutive line breaks
@@ -162,6 +205,10 @@ class JarvisCompanion:
 
                 except json.JSONDecodeError:
                     continue
+
+        # Handle any remaining content in buffers
+        if save_buffer and self.save_chat:
+            self.__save_context(save_buffer + "\n")
 
         # Render any remaining content in the buffer
         if buffer and render_markdown:
