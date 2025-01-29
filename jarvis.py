@@ -19,18 +19,17 @@ def main():
         exit(1)
 
 if __name__ == '__main__':
-    # TODO make LLM's customizable (config in a json file, jarvis_config.json): ✅
-    # TODO implement --save-chat
     parser = argparse.ArgumentParser(
         "Ask questions, and you shall receive answers",
-        description="An AI Based on meta's Llama for asking questions and giving short answers "
-                    "until deleted manually, typically every call to the jarvis.py is a new conversation "
-                    "a basic usage is: prompt the jarvis.py with --save-chat to save every chat from that point on "
-                    "all saved conversation have a unique id, it default way is that companion will use the last "
-                    "saved conversation unless specified otherwise to use another saved conversion" 
+        description="An AI Based on meta's Llama (can be changed in `jarvis_config.json`) for asking questions and giving short answers "
+                    "until changed manually, typically every call to jarvis.py is a new conversation "
+                    "a basic usage is: prompt the jarvis.py with --save-chat to save chat "
+                    "all saved conversation have a unique id" 
                     "every prompt without --save-chat will be stateless "
                     "example: jarvis.py 'how are you' --> this is stateless and will not be saved "
                     "example: jarvis.py 'how are you' --save-chat --> this will be saved "
+                    "example of using previous conversation: jarvis.py 'lets continue our conversation' --save-chat -c {uuid}"
+                    "the uuid would be the name of the conversation text file saved in /conversations"
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('-p', '--prompt',
